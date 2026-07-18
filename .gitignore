@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Validation and packaging scratch directories
+.tooling/
+.test-data/
+.package-test/
+
+# Per-user Fab catalogs must never be committed
+library_catalog.json
+FabLibraryAdvisor/
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

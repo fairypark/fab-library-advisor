@@ -1,0 +1,11 @@
+{
+  "schema_version": 2,
+  "source": "Not synced",
+  "synced_at": null,
+  "total_products": 0,
+  "indexed_products": 0,
+  "sync_status": "not-synced",
+  "sync_notes": "This private catalog has not been synced from the current user's authenticated Fab My Library view.",
+  "category_counts": {},
+  "items": []
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fab Library Advisor"
+  short_description: "Recommend assets from your own Fab library"
+  default_prompt: "Use $fab-library-advisor to privately sync my Fab library and recommend owned assets for this Unreal task."
