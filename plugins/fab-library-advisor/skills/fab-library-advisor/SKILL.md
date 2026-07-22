@@ -43,19 +43,32 @@ that catalog file. Do not redirect private data into the shared plugin directory
 2. Run:
 
 ```text
-python <skill-dir>/scripts/catalog.py search "<need or theme>" --limit 6 --json
+python <skill-dir>/scripts/catalog.py recommend "<need or theme>" \
+  --project-path "<current Unreal project>" --json
 ```
 
+The recommender expands common Korean/English synonyms and weights title,
+use cases, tags, style, technical features, included features, category, and
+description separately. It returns at most three candidates with `matched_on`,
+`confidence`, metadata completeness/freshness, missing information, integration
+cost, user-feedback influence, and possible project overlap.
+
 3. Treat only returned items with `ownership_status: confirmed` as owned.
-4. If no convincing indexed match exists, search the authenticated Unreal Editor
+4. Inspect current public listing pages only for the returned top candidates and
+   only when mutable facts such as engine compatibility, license terms, or current
+   download availability matter. Do not inspect every catalog product. A cached
+   `supported_engine_versions` value is an observation, not a current guarantee.
+5. If no convincing indexed match exists, search the authenticated Unreal Editor
    **My Library | Fab** view. Confirm that the product appears in that user's
    library before describing it as owned.
-5. Recommend at most three products. State the concrete use, likely integration
+6. Recommend at most three products. State the concrete use, likely integration
    cost, and overlap with project-native assets.
-6. Prefer the existing project solution when importing a large pack would add
+7. Prefer the existing project solution when importing a large pack would add
    unnecessary complexity or change the art direction.
 
-Use the exact Fab title in each recommendation. Clearly distinguish
+For each recommendation, include the exact title, publisher,
+`ownership_status`, and either the public `listing_url` or the exact
+`fab_search_query`. Make a stored URL clickable. Clearly distinguish
 ownership-confirmed recommendations from general marketplace suggestions.
 
 ## Sync or refresh a user's library
@@ -72,6 +85,19 @@ Store only:
 - category
 - useful search tags
 - `ownership_status: confirmed`
+- optional public Fab `listing_id` and canonical `listing_url`
+- optional stable recommendation metadata: short description, product types,
+  use cases, style tags, technical tags, included features, supported formats,
+  observed engine versions, and integration cost
+- metadata source and verification time
+- first/last My Library observation time
+
+Capture listing information only when the My Library result or a product link
+exposes it directly, or when an exact title-and-publisher match has been verified
+on the public product page. Do not infer an ID from a title, inspect private
+network APIs, or treat a public listing as proof of ownership. The only accepted
+URL form is the permanent public product page
+`https://www.fab.com/listings/<listing-id>`; tracking parameters are discarded.
 
 Add or update an observed product with:
 
@@ -80,8 +106,39 @@ python <skill-dir>/scripts/catalog.py upsert \
   --title "<exact title>" \
   --publisher "<publisher>" \
   --category "<category>" \
-  --tag "<tag>" --tag "<tag>"
+  --tag "<tag>" --tag "<tag>" \
+  --use-case "<use case>" \
+  --style-tag "<style>" \
+  --technical-tag "<verified technical feature>" \
+  --integration-cost low \
+  --listing-url "<public permanent Fab listing URL>"
 ```
+
+`--listing-id` can be used instead when the public listing UUID is directly
+available. Omit both options when neither value is verified. The tool continues
+to identify legacy records by normalized title and publisher, but prefers a
+listing ID and enriches an existing title-based record when that ID is later
+found.
+
+For a captured JSON object containing an `items` array, prefer one atomic batch
+write over many subprocess calls:
+
+```text
+python <skill-dir>/scripts/catalog.py batch-upsert "<observed-products.json>"
+```
+
+After inspecting a verified public listing, merge only supported stable metadata:
+
+```text
+python <skill-dir>/scripts/catalog.py enrich "<exact title>" \
+  --use-case "<use case>" \
+  --technical-tag "<feature>" \
+  --feature "<included feature>" \
+  --metadata-source public-listing
+```
+
+Do not copy marketing prose wholesale. Keep `short_description` factual and short.
+Do not save price, discount, rating, current download state, or license terms.
 
 Update visible library totals with:
 
@@ -95,11 +152,39 @@ python <skill-dir>/scripts/catalog.py set-summary \
 Run `validate` after a sync. Do not claim the title index is complete when only
 visible products or search results were captured.
 
+## Local feedback
+
+When the user explicitly says a recommendation was used, favored, dismissed, or
+should return to neutral, record that private preference locally:
+
+```text
+python <skill-dir>/scripts/catalog.py feedback "<exact title>" \
+  --status favorite --notes "<short local note>"
+```
+
+Allowed states are `unused`, `used`, `dismissed`, and `favorite`. Feedback adjusts
+ranking but never changes ownership evidence. Do not infer feedback from silence.
+
+## Reopen a recommended product
+
+Only when the user asks to open a recommended product, run:
+
+```text
+python <skill-dir>/scripts/catalog.py open "<exact title>"
+```
+
+When a validated `listing_url` exists, this opens the public product page in the
+default browser. The plugin has no verified Unreal Editor Fab deep-link API. When
+the URL is absent, the command does not guess one; it tells the user to open
+**My Library | Fab** and prints the exact product-title search query. Use
+`--no-launch --json` when access information is needed without opening a browser.
+
 ## Privacy and isolation
 
 - Never ship or copy a user's populated catalog with the plugin.
 - Never read or store cookies, access tokens, browser storage, account identifiers,
-  payment data, license keys, or download URLs.
+  payment data, license keys, signed download URLs, expiring CDN URLs, or session
+  URLs. `listing_url` means only the canonical public product-detail page.
 - A public Fab listing does not prove ownership.
 - Do not merge catalogs belonging to different operating-system users.
 - Plugin updates must not overwrite the catalog because it lives outside the plugin.
