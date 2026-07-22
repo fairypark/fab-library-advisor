@@ -71,12 +71,35 @@ For each recommendation, include the exact title, publisher,
 `fab_search_query`. Make a stored URL clickable. Clearly distinguish
 ownership-confirmed recommendations from general marketplace suggestions.
 
+## Default to just-in-time search sync
+
+During Unreal Engine work, prefer targeted search sync over pre-indexing the
+entire library. Do not delay the user's primary task to crawl every owned product.
+
+1. Search the private catalog for the current need, theme, or asset type.
+2. If no convincing indexed match exists, search the authenticated Unreal Editor
+   **My Library | Fab** view with focused terms or categories.
+3. Upsert only products visibly confirmed as owned, then continue the primary
+   Unreal task using the newly indexed results.
+4. Keep the catalog's sync status partial unless every owned title was actually
+   observed and validated.
+
+Run a full-library crawl only when the user explicitly requests complete indexing.
+Explain that Fab's paginated or infinite-scroll UI can make a full crawl lengthy
+and process it in validated batches.
+
 ## Sync or refresh a user's library
 
 Initialize the private catalog first. Use available desktop control to inspect the
 authenticated **My Library | Fab** view in Unreal Editor. If desktop control is
 unavailable, ask the user to open the view and provide the relevant visible results;
 do not substitute public marketplace results as proof of ownership.
+
+For an ordinary Unreal task, sync only the focused search results needed for that
+task. For an explicit refresh request, update visible totals and visible products.
+For an explicit complete-index request, iterate through the full library in batches,
+deduplicate exact titles, validate after each batch, and report incomplete coverage
+honestly if the UI cannot expose every product.
 
 Store only:
 
