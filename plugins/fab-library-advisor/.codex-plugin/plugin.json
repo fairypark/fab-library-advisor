@@ -1,6 +1,6 @@
 {
   "name": "fab-library-advisor",
-  "version": "0.2.0+codex.20260722113642",
+  "version": "0.2.1+codex.20260722114126",
   "description": "Suggest relevant assets from each user's own Fab library during Unreal Engine work.",
   "author": {
     "name": "fairypark",
