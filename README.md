@@ -19,11 +19,19 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 요구 사항
 
-- Codex 또는 ChatGPT 데스크톱 앱의 플러그인 기능
-- GitHub CLI와 Codex CLI
+- [ChatGPT 데스크톱 앱](https://get.microsoft.com/installer/download/9PLM9XGG6VKS?cid=website_cta_psi)의 Codex 및 플러그인 기능
+- [GitHub CLI](https://cli.github.com/)와 [Codex CLI](https://learn.chatgpt.com/docs/codex/cli)
 - Fab 통합 기능을 사용할 수 있는 Unreal Engine
 - Unreal Editor의 Fab에 로그인된 Epic 계정
 - Python 3.9 이상 권장
+
+## 최신 정식 릴리스
+
+- [Fab Library Advisor v0.2.0 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.2.0)
+- [fab-library-advisor-0.2.0.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.2.0/fab-library-advisor-0.2.0.zip)
+
+ZIP은 버전별 플러그인 패키지를 확인하거나 보관하기 위한 파일입니다. 처음
+설치하거나 업데이트할 때는 아래 마켓플레이스 명령을 사용하는 방법을 권장합니다.
 
 ## GitHub에서 설치
 
