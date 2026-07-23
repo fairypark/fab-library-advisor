@@ -11,6 +11,9 @@ while each user's catalog lives in that user's local application-data directory.
 
 Never download, install, migrate, enable, add, or purchase an asset unless the user
 explicitly asks for that separate action.
+An explicit download request authorizes only that asset's download. It does not
+authorize adding it to the library, purchasing it, installing it, migrating it
+into a project, or enabling a plugin.
 
 ## Resolve the private catalog
 
@@ -87,6 +90,32 @@ entire library. Do not delay the user's primary task to crawl every owned produc
 Run a full-library crawl only when the user explicitly requests complete indexing.
 Explain that Fab's paginated or infinite-scroll UI can make a full crawl lengthy
 and process it in validated batches.
+
+## Auto-index a requested download
+
+When the user explicitly asks to download a named asset, resolve a catalog miss
+before starting the download:
+
+1. Search the private catalog using the exact title and, when available, the
+   publisher or listing ID.
+2. If no exact record exists, search the authenticated Unreal Editor
+   **My Library | Fab** view for that product.
+3. If exactly one matching product is visibly confirmed as owned, upsert its
+   minimal approved metadata and run `validate` before attempting the download.
+   Prefer a directly visible listing ID; otherwise use the exact title and
+   publisher identity.
+4. Keep the new catalog record if the subsequent download fails. The record
+   captures confirmed ownership, not download state.
+5. If My Library does not show the product, do not upsert it. A public listing
+   alone is not ownership proof. Adding a free product to the library or
+   purchasing it requires separate explicit approval. After that action, confirm
+   it in My Library before upserting.
+6. If multiple products could match, ask for the publisher or listing ID instead
+   of guessing.
+
+Inspect a public listing only when it is needed to disambiguate an exact
+title-and-publisher match or confirm mutable download or compatibility facts.
+Do not mark the product as `used` merely because it was downloaded.
 
 ## Sync or refresh a user's library
 

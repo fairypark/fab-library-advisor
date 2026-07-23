@@ -15,6 +15,7 @@ the current user's own Fab library while working on Unreal Engine projects.
 - 용도·스타일·기술 특징·포함 기능을 구조화해 추천 근거와 신뢰도를 표시합니다.
 - Unreal 프로젝트의 엔진 버전, 플러그인과 콘텐츠 이름을 읽어 가능한 기능 중복을 알립니다.
 - 사용·즐겨찾기·제외 피드백을 개인 카탈로그에만 기록해 다음 추천 순위를 조정합니다.
+- 다운로드를 요청한 에셋이 카탈로그에 없으면 My Library에서 소유 여부를 확인하고 자동 등록한 뒤 다운로드합니다.
 - 구매·다운로드·프로젝트 추가는 사용자가 별도로 요청하기 전에는 수행하지 않습니다.
 
 ## 요구 사항
@@ -27,8 +28,8 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 최신 정식 릴리스
 
-- [Fab Library Advisor v0.3.1 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.1)
-- [fab-library-advisor-0.3.1.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.1/fab-library-advisor-0.3.1.zip)
+- [Fab Library Advisor v0.3.2 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.2)
+- [fab-library-advisor-0.3.2.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.2/fab-library-advisor-0.3.2.zip)
 
 ZIP은 버전별 플러그인 패키지를 확인하거나 수동으로 보관하기 위한 파일입니다.
 처음 설치하거나 업데이트할 때는 아래 공식 마켓플레이스 명령을 사용하세요.
@@ -144,6 +145,15 @@ python <skill-dir>/scripts/catalog.py --catalog <library_catalog.json> recommend
 다운로드 가능 여부가 필요한 경우에만 해당 후보의 공개 상세 페이지를
 확인합니다. 모든 제품 페이지를 매번 읽지 않으므로 추천 속도와 최신성의
 균형을 유지합니다.
+
+다운로드를 명시적으로 요청한 제품이 카탈로그에 없으면 로그인된
+**My Library | Fab**에서 정확한 제품을 찾습니다. 소유한 제품이 하나로
+확인될 때만 최소 메타데이터를 자동 등록하고 검증한 뒤 다운로드합니다.
+공개 제품 페이지에만 있거나 결과가 모호하면 자동 등록하지 않습니다.
+구매·라이브러리 추가·설치·프로젝트 마이그레이션·플러그인 활성화는
+다운로드 요청에 포함되지 않으며 각각 별도 승인이 필요합니다. 소유 확인
+후 다운로드가 실패해도 카탈로그 기록은 유지하고, 다운로드만으로
+`used` 피드백을 기록하지 않습니다.
 
 추천된 제품 페이지를 열려면 다음처럼 요청할 수 있습니다.
 

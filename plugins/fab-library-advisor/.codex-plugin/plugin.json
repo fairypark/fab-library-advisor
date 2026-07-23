@@ -1,6 +1,6 @@
 {
   "name": "fab-library-advisor",
-  "version": "0.3.1+codex.20260723045900",
+  "version": "0.3.2+codex.20260723090222",
   "description": "Suggest relevant assets from each user's own Fab library during Unreal Engine work.",
   "author": {
     "name": "fairypark",
@@ -19,7 +19,7 @@
   "interface": {
     "displayName": "Fab Library Advisor",
     "shortDescription": "Recommend assets from your own Fab library.",
-    "longDescription": "Indexes non-sensitive metadata from each user's authenticated Fab My Library view, recommends owned assets, and checks once daily for verified plugin updates.",
+    "longDescription": "Indexes non-sensitive metadata from each user's authenticated Fab My Library view, recommends owned assets, auto-indexes verified catalog misses before requested downloads, and checks once daily for verified plugin updates.",
     "developerName": "fairypark",
     "category": "Developer Tools",
     "capabilities": [
@@ -29,6 +29,7 @@
     "websiteURL": "https://github.com/fairypark/fab-library-advisor",
     "defaultPrompt": [
       "Search my private Fab catalog first and sync focused owned results only when needed.",
+      "When I request a download, verify and index a catalog-missing owned asset first.",
       "Check for a Fab Library Advisor update when the daily check is due.",
       "Check my owned Fab assets for this Unreal task.",
       "Recommend owned assets that fit the current map."
