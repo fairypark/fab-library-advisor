@@ -4,7 +4,6 @@ import importlib.util
 import json
 import tempfile
 import unittest
-import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,21 +40,7 @@ def release(version: str) -> dict[str, str]:
     return {
         "latest_version": version,
         "release_url": f"https://github.com/fairypark/fab-library-advisor/releases/tag/v{version}",
-        "download_url": f"https://github.com/fairypark/fab-library-advisor/releases/download/v{version}/fab-library-advisor-{version}.zip",
     }
-
-
-def write_release_zip(path: Path, version: str, extra: dict[str, str] | None = None) -> None:
-    files = {
-        "fab-library-advisor/.codex-plugin/plugin.json": json.dumps(
-            {"name": "fab-library-advisor", "version": version}
-        ),
-        "fab-library-advisor/skills/fab-library-advisor/SKILL.md": "# Updated\n",
-    }
-    files.update(extra or {})
-    with zipfile.ZipFile(path, "w") as bundle:
-        for name, content in files.items():
-            bundle.writestr(name, content)
 
 
 class UpdateCheckTests(unittest.TestCase):
@@ -91,59 +76,28 @@ class UpdateCheckTests(unittest.TestCase):
 
         self.assertEqual(
             set(payload),
-            {"last_checked_at", "latest_version", "release_url", "download_url"},
+            {"last_checked_at", "latest_version", "release_url"},
         )
 
+    def test_release_check_does_not_require_a_zip_asset(self) -> None:
+        parsed = fab_updater.validated_release(
+            {
+                "tag_name": "v0.3.1",
+                "html_url": "https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.1",
+                "assets": [],
+            }
+        )
 
-class UpdateInstallTests(unittest.TestCase):
-    def test_install_requires_explicit_approval(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            plugin = root / "plugin"
-            write_plugin(plugin, "0.2.1")
-            with self.assertRaises(fab_updater.UpdateError):
-                fab_updater.install_update(
-                    plugin,
-                    root / "state.json",
-                    approved=False,
-                    fetcher=lambda: release("0.3.0"),
-                )
+        self.assertEqual(parsed, release("0.3.1"))
 
-    def test_verified_zip_installs_and_preserves_backup(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            plugin = root / "plugin"
-            state = root / "state" / "update_state.json"
-            write_plugin(plugin, "0.2.1")
-
-            def downloader(_url: str, destination: Path) -> None:
-                write_release_zip(destination, "0.3.0+codex.456")
-
-            result = fab_updater.install_update(
-                plugin,
-                state,
-                approved=True,
-                fetcher=lambda: release("0.3.0"),
-                downloader=downloader,
-            )
-
-        self.assertEqual(result["status"], "installed")
-        self.assertEqual(result["previous_version"], "0.2.1")
-        self.assertTrue(result["restart_required"])
-
-    def test_archive_rejects_traversal_and_private_catalog(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            archive = Path(directory) / "bad.zip"
-            write_release_zip(
-                archive,
-                "0.3.0",
+    def test_release_check_rejects_a_different_repository(self) -> None:
+        with self.assertRaises(fab_updater.UpdateError):
+            fab_updater.validated_release(
                 {
-                    "fab-library-advisor/../escape.txt": "bad",
-                    "fab-library-advisor/library_catalog.json": "{}",
-                },
+                    "tag_name": "v0.3.1",
+                    "html_url": "https://github.com/example/fab-library-advisor/releases/tag/v0.3.1",
+                }
             )
-            with self.assertRaises(fab_updater.UpdateError):
-                fab_updater.validate_archive(archive, "0.3.0")
 
 
 if __name__ == "__main__":

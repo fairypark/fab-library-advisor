@@ -224,15 +224,50 @@ so repeated skill use does not repeatedly contact GitHub.
 
 Only after the user explicitly approves installing the update, run:
 
+1. Select the public `fairypark` installation only. Before changing anything, inspect:
+
 ```text
-python <skill-dir>/scripts/updater.py --json install --yes
+# Windows
+codex.cmd plugin list --marketplace fairypark --json
+
+# macOS or Linux
+codex plugin list --marketplace fairypark --json
 ```
 
-The updater accepts only the versioned ZIP from this plugin's public GitHub Release,
-checks its layout and manifest, and creates a local backup before copying it. Report
-the result and tell the user to restart Codex or begin a new task when
-`restart_required` is true. The private Fab catalog is not inside the plugin and must
-remain untouched.
+On Windows, invoke `codex.cmd` instead of `codex`. Require an installed, enabled
+`fab-library-advisor@fairypark` entry. If the CLI is unavailable, the marketplace is
+missing, or the plugin is installed only from another marketplace such as `personal`,
+stop and explain how to update from the Codex Plugins screen or install the Codex CLI.
+Do not download and copy a release ZIP as an automatic fallback. If duplicate
+installations exist, report them but never remove one without explicit approval.
+
+2. After approval, refresh the official Git marketplace snapshot directly:
+
+```text
+# Windows
+codex.cmd plugin marketplace upgrade fairypark --json
+
+# macOS or Linux
+codex plugin marketplace upgrade fairypark --json
+```
+
+Run the command directly so Codex can show and approve the external change. Do not
+hide it inside `updater.py` or another wrapper.
+
+3. Re-run the marketplace-scoped JSON listing and verify that
+`fab-library-advisor@fairypark` is installed, enabled, and reports the expected
+latest version:
+
+```text
+# Windows
+codex.cmd plugin list --marketplace fairypark --json
+
+# macOS or Linux
+codex plugin list --marketplace fairypark --json
+```
+
+Report the verified version and tell the user to restart Codex and begin a new task.
+The private Fab catalog remains outside the plugin and must remain untouched.
 
 ## Privacy and isolation
 
