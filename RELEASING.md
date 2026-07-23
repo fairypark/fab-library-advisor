@@ -46,6 +46,11 @@ every `--interface` value containing `$fab-library-advisor`. Otherwise
 PowerShell expands `$fab` and silently corrupts the skill name. Confirm the
 literal `$fab-library-advisor` remains in the generated diff.
 
+Run commands that require sandbox escalation sequentially. Do not group multiple
+approval-gated validators into one parallel tool call; simultaneous approval
+requests can remain waiting even though each validator normally finishes in less
+than a second.
+
 ## Publish through GitHub
 
 Check `gh auth status` before repository writes. Prefer the connected GitHub app,
