@@ -28,8 +28,8 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 최신 정식 릴리스
 
-- [Fab Library Advisor v0.3.2 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.2)
-- [fab-library-advisor-0.3.2.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.2/fab-library-advisor-0.3.2.zip)
+- [Fab Library Advisor v0.3.3 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.3)
+- [fab-library-advisor-0.3.3.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.3/fab-library-advisor-0.3.3.zip)
 
 ZIP은 버전별 플러그인 패키지를 확인하거나 수동으로 보관하기 위한 파일입니다.
 처음 설치하거나 업데이트할 때는 아래 공식 마켓플레이스 명령을 사용하세요.

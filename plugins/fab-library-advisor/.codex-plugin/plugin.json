@@ -1,6 +1,6 @@
 {
   "name": "fab-library-advisor",
-  "version": "0.3.2+codex.20260723090222",
+  "version": "0.3.3+codex.20260730103248",
   "description": "Suggest relevant assets from each user's own Fab library during Unreal Engine work.",
   "author": {
     "name": "fairypark",
@@ -30,6 +30,7 @@
     "defaultPrompt": [
       "Search my private Fab catalog first and sync focused owned results only when needed.",
       "When I request a download, verify and index a catalog-missing owned asset first.",
+      "For Unreal assets, select the exact project engine version or the newest version Fab explicitly supports.",
       "Check for a Fab Library Advisor update when the daily check is due.",
       "Check my owned Fab assets for this Unreal task.",
       "Recommend owned assets that fit the current map."
