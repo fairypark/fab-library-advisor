@@ -1,4 +1,4 @@
 interface:
   display_name: "Fab Library Advisor"
   short_description: "Recommend assets from your own Fab library"
-  default_prompt: "Use $fab-library-advisor to check for updates, search my private Fab catalog, sync focused owned results, and verify and index a missing owned asset before a requested download."
+  default_prompt: "Use $fab-library-advisor to check for updates, search my private Fab catalog, sync focused owned results, verify and index a missing owned asset before a requested download, and select the exact project engine version or the newest explicitly supported fallback."

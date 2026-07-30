@@ -15,6 +15,27 @@ An explicit download request authorizes only that asset's download. It does not
 authorize adding it to the library, purchasing it, installing it, migrating it
 into a project, or enabling a plugin.
 
+## Select an Unreal Engine version
+
+Before downloading or adding an Unreal Engine asset, determine the target
+project's current engine version from the live Editor or its `.uproject` file.
+
+1. Select the exact current engine version when Fab offers it.
+2. If that exact version is unavailable, select the newest version that Fab
+   explicitly shows as supported.
+3. Never select an unlisted version or infer compatibility from a cached catalog
+   value. Confirm mutable compatibility information in the current Fab UI or
+   public listing at the time of the action.
+4. Tell the user whenever a fallback version was selected, including the target
+   project version and the selected supported version.
+5. If Fab shows no supported Unreal Engine version, stop instead of guessing.
+
+Keep downloads and imports from disturbing active level work. Do not place
+downloaded assets, change the loaded level, save the level, trigger PIE, or
+restart the Editor unless the user separately requests that action. After an
+import, verify the expected content through the Asset Registry or Content Browser
+and inspect relevant import warnings before reporting success.
+
 ## Resolve the private catalog
 
 Use `scripts/catalog.py` for every catalog operation. It resolves the path in this
