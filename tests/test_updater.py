@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -44,6 +45,38 @@ def release(version: str) -> dict[str, str]:
 
 
 class UpdateCheckTests(unittest.TestCase):
+    def test_unwritable_cache_still_returns_verified_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            plugin = Path(directory) / "plugin"
+            write_plugin(plugin, "0.2.1")
+            with patch.object(fab_updater, "atomic_write_json", side_effect=PermissionError):
+                result = fab_updater.check_for_update(
+                    plugin, Path(directory) / "state.json", fetcher=lambda: release("0.3.0")
+                )
+        self.assertEqual(result["status"], "update_available")
+        self.assertEqual(result["release_url"], release("0.3.0")["release_url"])
+        self.assertFalse(result["cache_saved"])
+
+    def test_invalid_cache_is_replaced_with_verified_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            plugin = Path(directory) / "plugin"
+            state = Path(directory) / "state.json"
+            write_plugin(plugin, "0.2.1")
+            now = datetime(2026, 7, 22, tzinfo=timezone.utc)
+            cached = dict(release("0.3.0"), last_checked_at=now.isoformat())
+            for overrides in (
+                {"release_url": "https://example.org/another-release"},
+                {"latest_version": "unknown"},
+                {"last_checked_at": "2099-01-01T00:00:00Z"},
+            ):
+                with self.subTest(overrides=overrides):
+                    state.write_text(json.dumps({**cached, **overrides}), encoding="utf-8")
+                    result = fab_updater.check_for_update(
+                        plugin, state, now=now, fetcher=lambda: release("0.3.1")
+                    )
+                    self.assertEqual(result["latest_version"], "0.3.1")
+                    self.assertEqual(fab_updater.read_json(state)["release_url"], release("0.3.1")["release_url"])
+
     def test_daily_gate_uses_cached_result_without_network(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
