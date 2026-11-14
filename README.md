@@ -28,8 +28,8 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 최신 정식 릴리스
 
-- [Fab Library Advisor v0.3.4 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.4)
-- [fab-library-advisor-0.3.4.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.4/fab-library-advisor-0.3.4.zip)
+- [Fab Library Advisor v0.4.0 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.4.0)
+- [fab-library-advisor-0.4.0.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.4.0/fab-library-advisor-0.4.0.zip)
 
 ZIP은 버전별 플러그인 패키지를 확인하거나 수동으로 보관하기 위한 파일입니다.
 처음 설치하거나 업데이트할 때는 아래 공식 마켓플레이스 명령을 사용하세요.
@@ -92,18 +92,20 @@ ChatGPT 데스크톱 앱을 다시 시작하고 새 작업을 만드세요.
 ## 최초 동기화
 
 1. Unreal Editor를 실행합니다.
-2. **My Library | Fab**를 열고 자신의 Epic 계정으로 로그인합니다.
+2. Fab에 자신의 Epic 계정으로 로그인합니다. UE 5.9에서는 대상 에디터의 Unreal MCP 연결에서 공식 Fab 툴셋을 사용할 수 있는지 확인합니다. UE 5.8에서는 **My Library | Fab**를 엽니다.
 3. Codex에서 다음과 같이 요청합니다.
 
 ```text
 내 Fab 라이브러리를 동기화해줘.
 ```
 
-라이브러리 전체를 공식 API로 일괄 내려받는 방식은 아닙니다. 로그인된
-My Library 화면에서 확인한 제품과 검색 결과를 중심으로 개인 색인이
-점진적으로 확장됩니다. My Library 결과나 확인된 제품 링크에서 공개 Fab
-상세 페이지를 식별할 수 있을 때만 Listing ID와 URL을 추가합니다. 화면에서
-확인할 수 없는 ID나 비공개 Fab API의 필드는 추측하지 않습니다.
+UE 5.9에서는 공식 `SearchFabMyLibrary`로 보유 제품을 검색합니다. Advisor는
+확인된 항목을 개인 카탈로그에 반영한 뒤, 이번 검색에서 받은 Listing ID를
+대상으로 프로젝트 적합도와 기존 사용·즐겨찾기·제외 기록을 반영해 순위를 정합니다.
+공식 응답은 라이브러리 전체 수량을 제공하지 않으므로 검색 건수와 구분합니다.
+UE 5.8에서는 기존처럼 로컬 카탈로그를 먼저 검색하고, 결과가 부족하거나
+동기화를 요청하면 로그인된 **My Library | Fab** 화면에서 보유 여부를 확인합니다.
+5.9 공식 도구에 연결할 수 없을 때도 이 화면을 사용할 수 있습니다.
 
 ## 사용 예시
 
@@ -151,8 +153,8 @@ python <skill-dir>/scripts/catalog.py --catalog <library_catalog.json> recommend
 예를 들어 프로젝트가 UE 5.1이고 제품에 기록된 버전이 5.10이면
 해당 제품의 5.1 호환성은 추가 확인이 필요한 정보로 표시됩니다.
 
-다운로드를 명시적으로 요청한 제품이 카탈로그에 없으면 로그인된
-**My Library | Fab**에서 정확한 제품을 찾습니다. 소유한 제품이 하나로
+다운로드를 명시적으로 요청한 제품이 카탈로그에 없으면 엔진 버전에 맞는
+보유 검색으로 정확한 제품을 찾습니다. 소유한 제품이 하나로
 확인될 때만 최소 메타데이터를 자동 등록하고 검증한 뒤 다운로드합니다.
 공개 제품 페이지에만 있거나 결과가 모호하면 자동 등록하지 않습니다.
 구매·라이브러리 추가·설치·프로젝트 마이그레이션·플러그인 활성화는

@@ -10,6 +10,7 @@ import re
 import sys
 import tempfile
 import webbrowser
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,7 @@ ALLOWED_TOP_FIELDS = (
     "source",
     "synced_at",
     "total_products",
+    "total_products_is_lower_bound",
     "indexed_products",
     "sync_status",
     "sync_notes",
@@ -66,10 +68,12 @@ LISTING_PATH_RE = re.compile(
 )
 FAB_LISTING_ORIGIN = "https://www.fab.com"
 FAB_LISTING_HOSTS = {"fab.com", "www.fab.com"}
-ENGINE_VERSION_RE = re.compile(r"(?:Unreal Engine\s*|UE\s*)?(\d+\.\d+(?:\.\d+)?)", re.I)
+ENGINE_VERSION_RE = re.compile(r"(?:Unreal Engine\s*|UE[_\s]*)?(\d+\.\d+(?:\.\d+)?)", re.I)
 INTEGRATION_COSTS = {"unknown", "low", "medium", "high"}
 FEEDBACK_STATUSES = {"unused", "used", "dismissed", "favorite"}
-METADATA_SOURCES = {"my-library", "public-listing", "user-note", "legacy-import"}
+FAB_TOOLSET_SOURCE = "fab-my-library-toolset"
+FAB_TOOLSET_CATALOG_SOURCE = "Authenticated Fab My Library (UE FabToolset)"
+METADATA_SOURCES = {"my-library", FAB_TOOLSET_SOURCE, "public-listing", "user-note", "legacy-import"}
 LIST_FIELDS = (
     "tags",
     "product_types",
@@ -239,6 +243,8 @@ def normalize_listing_id(value: Any) -> str | None:
 def listing_identity(
     raw_listing_id: Any,
     raw_listing_url: Any,
+    *,
+    derive_url: bool = True,
 ) -> tuple[str | None, str | None]:
     """Validate and canonicalize a public, permanent Fab listing reference."""
     listing_id = normalize_listing_id(raw_listing_id)
@@ -273,15 +279,16 @@ def listing_identity(
         raise CatalogError("listing_id does not match listing_url")
 
     canonical_id = listing_id or url_listing_id
-    if canonical_id is None:
-        return None, None
+    if canonical_id is None or (not derive_url and url_listing_id is None):
+        return canonical_id, None
     return canonical_id, f"{FAB_LISTING_ORIGIN}/listings/{canonical_id}"
 
 
 def fab_access_info(item: dict[str, Any]) -> dict[str, Any]:
     """Describe the stable way to revisit an indexed product."""
     listing_id, listing_url = listing_identity(
-        item.get("listing_id"), item.get("listing_url")
+        item.get("listing_id"), item.get("listing_url"),
+        derive_url=FAB_TOOLSET_SOURCE not in (item.get("metadata_sources") or []),
     )
     return {
         "listing_id": listing_id,
@@ -328,6 +335,22 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
             temporary_path.unlink()
 
 
+@contextmanager
+def catalog_write_lock(path: Path):
+    """Serialize read-modify-write CLI operations, including sync and feedback."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Keep the lock file so all writers always lock the same underlying file.
+    with path.with_name(path.name + ".lock").open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        yield  # Closing the handle releases the OS lock, including on errors.
+
+
 def template_catalog() -> dict[str, Any]:
     return read_json(TEMPLATE_PATH)
 
@@ -342,14 +365,15 @@ def sanitize_item(raw_item: dict[str, Any]) -> dict[str, Any]:
     item["ownership_status"] = str(
         item.get("ownership_status") or ""
     ).strip()
-    item["listing_id"], item["listing_url"] = listing_identity(
-        item.get("listing_id"), item.get("listing_url")
-    )
     item["short_description"] = clean_text(
         item.get("short_description"), "short_description"
     )
     for field in LIST_FIELDS:
         item[field] = clean_string_list(item.get(field), field)
+    item["listing_id"], item["listing_url"] = listing_identity(
+        item.get("listing_id"), item.get("listing_url"),
+        derive_url=FAB_TOOLSET_SOURCE not in item["metadata_sources"],
+    )
 
     invalid_sources = set(item["metadata_sources"]) - METADATA_SOURCES
     if invalid_sources:
@@ -374,6 +398,8 @@ def sanitize_catalog(payload: dict[str, Any]) -> dict[str, Any]:
     )
     sanitized["synced_at"] = payload.get("synced_at")
     sanitized["total_products"] = int(payload.get("total_products") or 0)
+    if payload.get("total_products_is_lower_bound") is not True:
+        sanitized.pop("total_products_is_lower_bound", None)
     sanitized["sync_status"] = clean_text(
         payload.get("sync_status") or "live-assisted-partial-index",
         "sync_status",
@@ -746,10 +772,10 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_validate(args: argparse.Namespace) -> int:
     catalog = read_json(args.catalog)
     require_valid(catalog)
-    print(
-        f"OK: {catalog['indexed_products']} indexed / "
-        f"{catalog['total_products']} total products at {args.catalog}"
-    )
+    total = catalog["total_products"]
+    if catalog.get("total_products_is_lower_bound"):
+        total = "unknown"
+    print(f"OK: {catalog['indexed_products']} indexed / {total} total products at {args.catalog}")
     return 0
 
 
@@ -772,7 +798,7 @@ def cmd_summary(args: argparse.Namespace) -> int:
         "catalog": str(args.catalog),
         "synced_at": catalog.get("synced_at"),
         "sync_status": catalog.get("sync_status"),
-        "total_products": catalog.get("total_products"),
+        "total_products": None if catalog.get("total_products_is_lower_bound") else catalog["total_products"],
         "indexed_products": catalog.get("indexed_products"),
         "category_counts": catalog.get("category_counts"),
         "linked_products": linked_products,
@@ -867,6 +893,11 @@ def cmd_recommend(args: argparse.Namespace) -> int:
     catalog = read_json(args.catalog)
     require_valid(catalog)
     catalog = sanitize_catalog(catalog)
+    if args.listing_id:
+        selected = {normalize_listing_id(value) for value in args.listing_id}
+        if None in selected:
+            raise CatalogError("--listing-id requires a nonempty Fab listing ID.")
+        catalog["items"] = [item for item in catalog["items"] if item["listing_id"] in selected]
     project = inspect_unreal_project(args.project_path)
     engine_version = args.engine_version
     if not engine_version and project:
@@ -958,6 +989,10 @@ def merge_product(catalog: dict[str, Any], candidate: dict[str, Any]) -> bool:
     merged = dict(candidate)
     for index in matching_indices:
         existing = catalog["items"][index]
+        if FAB_TOOLSET_SOURCE in candidate["metadata_sources"] and existing.get("category"):
+            # Fab returns a listing type, while a previously observed UI category
+            # may be more specific. Keep both without changing legacy filtering.
+            merged["category"] = existing["category"]
         for field in LIST_FIELDS:
             merged[field] = sorted(
                 set(existing.get(field, [])) | set(merged.get(field, [])),
@@ -1087,15 +1122,64 @@ def cmd_upsert(args: argparse.Namespace) -> int:
     return 0
 
 
+def fab_owned_items(page: dict[str, Any]) -> list[dict[str, Any]]:
+    """Project a successful SearchFabMyLibrary page onto catalog fields."""
+    rows = page.get("results")
+    if not isinstance(rows, list) or "error" in page or page.get("isError"):
+        raise CatalogError("Expected a successful SearchFabMyLibrary results page.")
+    items = []
+    for row in rows:
+        if not isinstance(row, dict) or row.get("owned") is not True:
+            raise CatalogError("Every SearchFabMyLibrary result must have owned: true.")
+        for key in ("listingId", "title", "seller", "listingType"):
+            if not isinstance(row.get(key), str) or not row[key].strip():
+                raise CatalogError(f"Missing or invalid SearchFabMyLibrary field: {key}")
+        if not LISTING_ID_RE.fullmatch(row["listingId"]):
+            raise CatalogError("SearchFabMyLibrary returned an invalid listingId.")
+        for key in ("assetFormats", "engineVersions"):
+            values = row.get(key, [])
+            if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
+                raise CatalogError(f"Invalid SearchFabMyLibrary array: {key}")
+        items.append({
+            "listing_id": row["listingId"],
+            "title": row["title"],
+            "publisher": row["seller"],
+            "category": row["listingType"],
+            "product_types": [row["listingType"]],
+            "supported_formats": row.get("assetFormats", []),
+            "supported_engine_versions": row.get("engineVersions", []),
+            "metadata_sources": [FAB_TOOLSET_SOURCE],
+            "ownership_status": "confirmed",
+        })
+    return items
+
+
 def cmd_batch_upsert(args: argparse.Namespace) -> int:
     if args.catalog.exists():
         catalog = sanitize_catalog(read_json(args.catalog))
     else:
         catalog = template_catalog()
     payload = read_json(args.source)
-    raw_items = payload.get("items")
+    official = getattr(args, "from_fab_toolset", False)
+    raw_items = fab_owned_items(payload) if official else payload.get("items")
     if not isinstance(raw_items, list):
         raise CatalogError("Batch source must contain an items array.")
+    if official and not raw_items:
+        print("Empty owned-library page. No catalog entries changed.")
+        return 0
+    if official:
+        legacy_names = {
+            (normalize(item["title"]), normalize(item["publisher"]))
+            for item in catalog["items"] if not item["listing_id"]
+        }
+        identified: dict[tuple[str, str], str | None] = {}
+        for item in raw_items:
+            name = (normalize(item["title"]), normalize(item["publisher"]))
+            listing_id = normalize_listing_id(item["listing_id"])
+            if name in legacy_names:
+                if name in identified and identified[name] != listing_id:
+                    raise CatalogError("Multiple live listings match a legacy record. Verify its listing ID first.")
+                identified[name] = listing_id
 
     added = 0
     updated = 0
@@ -1134,6 +1218,14 @@ def cmd_batch_upsert(args: argparse.Namespace) -> int:
             added += 1
 
     finalize_catalog(catalog, synced=True)
+    if official:
+        catalog["source"] = FAB_TOOLSET_CATALOG_SOURCE
+        catalog["total_products_is_lower_bound"] = True
+        if catalog["category_counts"] and sum(catalog["category_counts"].values()) < catalog["indexed_products"]:
+            # This search proves the previous count snapshot is obsolete. Fab
+            # provides no replacement breakdown or exact library total.
+            catalog["category_counts"] = {}
+            catalog["sync_notes"] = "The indexed count is a lower bound. Current Fab totals are unknown."
     require_valid(catalog)
     atomic_write_json(args.catalog, catalog)
     print(f"Batch upsert complete: {added} added, {updated} updated ({args.catalog})")
@@ -1143,6 +1235,8 @@ def cmd_batch_upsert(args: argparse.Namespace) -> int:
 def cmd_enrich(args: argparse.Namespace) -> int:
     catalog = sanitize_catalog(read_json(args.catalog))
     item = find_catalog_item(catalog, args.product, args.publisher)
+    if getattr(args, "listing_url", None):
+        item["listing_id"], item["listing_url"] = listing_identity(item["listing_id"], args.listing_url)
     for field, values in (
         ("product_types", args.product_type),
         ("use_cases", args.use_case),
@@ -1211,6 +1305,8 @@ def cmd_set_summary(args: argparse.Namespace) -> int:
         catalog["total_products"] = args.total_products
     elif catalog["category_counts"]:
         catalog["total_products"] = sum(catalog["category_counts"].values())
+    if args.total_products is not None or new_counts:
+        catalog.pop("total_products_is_lower_bound", None)
 
     catalog["schema_version"] = SCHEMA_VERSION
     catalog["source"] = args.source
@@ -1349,6 +1445,7 @@ def build_parser() -> argparse.ArgumentParser:
     recommend_parser.add_argument("--limit", type=int, default=3)
     recommend_parser.add_argument("--engine-version")
     recommend_parser.add_argument("--project-path", type=Path)
+    recommend_parser.add_argument("--listing-id", action="append", help="Rank only these observed listings (repeatable)")
     recommend_parser.add_argument("--json", action="store_true", dest="as_json")
     recommend_parser.set_defaults(func=cmd_recommend)
 
@@ -1398,6 +1495,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add or update ownership-confirmed products from a sanitized JSON items array",
     )
     batch_parser.add_argument("source", type=Path)
+    batch_parser.add_argument("--from-fab-toolset", action="store_true",
+                              help="Read the results page of UE SearchFabMyLibrary")
     batch_parser.set_defaults(func=cmd_batch_upsert)
 
     enrich_parser = subparsers.add_parser(
@@ -1406,6 +1505,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     enrich_parser.add_argument("product")
     enrich_parser.add_argument("--publisher")
+    enrich_parser.add_argument("--listing-url", help="Verified public URL returned for this listing")
     enrich_parser.add_argument("--short-description")
     enrich_parser.add_argument("--product-type", action="append", default=[])
     enrich_parser.add_argument("--use-case", action="append", default=[])
@@ -1480,7 +1580,9 @@ def main() -> int:
     if hasattr(args, "source") and isinstance(args.source, Path):
         args.source = args.source.expanduser().resolve()
     try:
-        return args.func(args)
+        read_only = args.func in (cmd_path, cmd_validate, cmd_summary, cmd_search, cmd_recommend, cmd_open)
+        with nullcontext() if read_only else catalog_write_lock(args.catalog):
+            return args.func(args)
     except (CatalogError, OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1

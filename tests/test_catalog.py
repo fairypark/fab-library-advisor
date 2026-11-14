@@ -5,6 +5,8 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -92,6 +94,96 @@ class CatalogCompatibilityTests(unittest.TestCase):
         fab_catalog.require_valid(loaded)
         self.assertEqual(loaded["items"][0]["listing_id"], LISTING_ID)
         self.assertEqual(loaded["items"][0]["listing_url"], LISTING_URL)
+
+
+class FabToolsetWorkflowTests(unittest.TestCase):
+    def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.catalog = Path(directory.name) / "catalog.json"
+        self.page = self.catalog.with_name("page.json")
+        self.row = {
+            "listingId": LISTING_ID, "title": "Forest Pack", "seller": "Example Studio",
+            "listingType": "3d-model", "owned": True,
+            "engineVersions": ["UE_5.9"], "assetFormats": ["unreal-engine"],
+        }
+
+    def cli(self, *arguments):
+        args = fab_catalog.build_parser().parse_args(["--catalog", str(self.catalog), *arguments])
+        output = StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(args.func(args), 0)
+        return output.getvalue()
+
+    def sync(self, *rows):
+        self.page.write_text(json.dumps({"results": rows}), encoding="utf-8")
+        self.cli("batch-upsert", str(self.page), "--from-fab-toolset")
+
+    def test_58_ui_record_and_feedback_survive_59_sync_and_return_to_58(self):
+        self.page.write_text(json.dumps({"items": [item(), item("Other Forest")]}), encoding="utf-8")
+        self.cli("batch-upsert", str(self.page))
+        self.cli("feedback", "Forest Pack", "--status", "favorite", "--notes", "for this map")
+        before = fab_catalog.read_json(self.catalog)["items"][0]
+        self.sync(dict(self.row, thumbnailUrl="ignored", user_feedback={"status": "dismissed"}))
+        self.sync(self.row)
+        self.cli("validate")
+        ranked = json.loads(self.cli("recommend", "숲", "--engine-version", "5.9",
+                                     "--listing-id", LISTING_ID, "--json"))["candidates"]
+        self.assertEqual(len(ranked), 1)
+        match = ranked[0]
+        self.assertEqual(match["listing_id"], LISTING_ID)
+        self.assertIsNone(match["listing_url"])
+        self.assertEqual(match["matched_on"]["engine_version"], ["5.9"])
+        self.assertEqual(match["user_feedback"], before["user_feedback"])
+        self.assertEqual(match["category"], before["category"])
+        self.assertEqual(match["first_seen_at"], before["first_seen_at"])
+        self.assertIn("3d-model", match["product_types"])
+        self.assertNotIn("thumbnailUrl", self.catalog.read_text(encoding="utf-8"))
+        self.cli("enrich", LISTING_ID, "--listing-url", LISTING_URL, "--metadata-source", "public-listing")
+        self.cli("upsert", "--title", "Forest Pack", "--publisher", "Example Studio", "--category", "Environment")
+        self.assertEqual(len(json.loads(self.cli("recommend", "forest", "--json"))["candidates"]), 2)
+        opened = json.loads(self.cli("open", LISTING_ID, "--no-launch", "--json"))
+        self.assertEqual(opened["listing_url"], LISTING_URL)
+        self.cli("validate")
+
+    def test_public_malformed_and_failed_pages_are_atomic_and_empty_is_a_noop(self):
+        self.sync(self.row)
+        before = self.catalog.read_bytes()
+        for invalid in (False, None, 1, "true"):
+            with self.subTest(owned=invalid), self.assertRaises(fab_catalog.CatalogError):
+                self.sync(self.row, dict(self.row, owned=invalid))
+        for patch in ({"seller": ""}, {"listingId": "bad-id"}, {"engineVersions": "UE_5.9"}):
+            with self.subTest(patch=patch), self.assertRaises(fab_catalog.CatalogError):
+                self.sync(self.row, dict(self.row, **patch))
+        public = dict(self.row)
+        del public["owned"]
+        with self.assertRaises(fab_catalog.CatalogError):
+            self.sync(public)
+        for failed in ({"error": "sign in required"}, {"results": [], "isError": True}):
+            self.page.write_text(json.dumps(failed), encoding="utf-8")
+            with self.assertRaises(fab_catalog.CatalogError):
+                self.cli("batch-upsert", str(self.page), "--from-fab-toolset")
+        self.sync()
+        self.assertEqual(self.catalog.read_bytes(), before)
+
+    def test_ambiguous_legacy_preference_is_not_assigned_to_first_live_row(self):
+        self.cli("upsert", "--title", "Forest Pack", "--publisher", "Example Studio", "--category", "Forest")
+        before = self.catalog.read_bytes()
+        with self.assertRaises(fab_catalog.CatalogError):
+            self.sync(self.row, dict(self.row, listingId="00000000-0000-4000-8000-000000000002"))
+        self.assertEqual(self.catalog.read_bytes(), before)
+
+    def test_search_can_outgrow_previous_ui_totals(self):
+        self.cli("set-summary", "--total-products", "1", "--category-count", "3D=1")
+        another = dict(self.row, title="Another Pack", listingId="00000000-0000-4000-8000-000000000002")
+        self.sync(self.row, another)
+        saved = fab_catalog.read_json(self.catalog)
+        self.assertEqual(saved["category_counts"], {})
+        self.assertEqual(saved["sync_status"], "live-assisted-partial-index")
+        self.assertIsNone(json.loads(self.cli("summary"))["total_products"])
+        self.cli("set-summary", "--total-products", "20")
+        self.assertEqual(json.loads(self.cli("summary"))["total_products"], 20)
+        self.cli("validate")
 
 
 class CatalogIdentityTests(unittest.TestCase):
