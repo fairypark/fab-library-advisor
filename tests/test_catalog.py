@@ -5,6 +5,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -94,6 +95,30 @@ class CatalogCompatibilityTests(unittest.TestCase):
 
 
 class CatalogIdentityTests(unittest.TestCase):
+    def test_ambiguous_resync_preserves_both_listings_and_the_entire_batch(self) -> None:
+        other_id = "00000000-0000-4000-8000-000000000002"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "library_catalog.json"
+            for listing_id in (LISTING_ID, other_id):
+                fab_catalog.cmd_upsert(upsert_args(path, listing_id=listing_id))
+            before = path.read_bytes()
+
+            with self.assertRaisesRegex(fab_catalog.CatalogError, "listing ID"):
+                fab_catalog.cmd_upsert(upsert_args(path))
+            self.assertEqual(path.read_bytes(), before)
+
+            source = path.with_name("batch.json")
+            source.write_text(json.dumps({"items": [item("New Pack"), item()]}), encoding="utf-8")
+            with self.assertRaisesRegex(fab_catalog.CatalogError, "listing ID"):
+                fab_catalog.cmd_batch_upsert(argparse.Namespace(catalog=path, source=source))
+            self.assertEqual(path.read_bytes(), before)
+
+            fab_catalog.cmd_upsert(upsert_args(path, listing_id=other_id, tag=["night"]))
+            products = {entry["listing_id"]: entry for entry in fab_catalog.read_json(path)["items"]}
+            self.assertEqual(set(products), {LISTING_ID, other_id})
+            self.assertIn("night", products[other_id]["tags"])
+            self.assertNotIn("night", products[LISTING_ID]["tags"])
+
     def test_same_listing_id_updates_instead_of_duplicating(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "library_catalog.json"
@@ -237,7 +262,7 @@ class StructuredRecommendationTests(unittest.TestCase):
                 "supported_formats": ["Unreal Engine"],
                 "integration_cost": "low",
                 "metadata_sources": ["public-listing"],
-                "metadata_verified_at": "2026-07-22T00:00:00+00:00",
+                "metadata_verified_at": datetime.now(timezone.utc).isoformat(),
             }
         )
         return fab_catalog.sanitize_item(raw)
@@ -283,6 +308,29 @@ class StructuredRecommendationTests(unittest.TestCase):
         self.assertEqual([result["title"] for result in results], ["Forest B", "Forest A"])
         self.assertLess(results[1]["score"], results[0]["score"])
 
+    def test_engine_or_favorite_alone_does_not_make_a_search_match(self) -> None:
+        product = self.enriched_item()
+        product["user_feedback"]["status"] = "favorite"
+        catalog = legacy_catalog([product])
+        self.assertEqual(fab_catalog.rank_catalog(catalog, "spaceship", engine_version="5.5"), [])
+        result, = fab_catalog.rank_catalog(catalog, "forest", engine_version="5.5")
+        self.assertEqual(result["matched_on"]["engine_version"], ["5.5"])
+
+    def test_engine_version_requires_a_whole_observed_version(self) -> None:
+        product = self.enriched_item()
+        product["supported_engine_versions"] = ["5.10", "UE 5.3"]
+        catalog = legacy_catalog([product])
+        for target in ("5.1", "10.5", "5.3.1"):
+            with self.subTest(target=target):
+                result, = fab_catalog.rank_catalog(catalog, "forest", engine_version=target)
+                self.assertNotIn("engine_version", result["matched_on"])
+                self.assertIn(f"engine_compatibility_for_{target}", result["missing_information"])
+        for target in ("5.10", "5.3"):
+            with self.subTest(target=target):
+                result, = fab_catalog.rank_catalog(catalog, "forest", engine_version=target)
+                self.assertIn("engine_version", result["matched_on"])
+                self.assertNotIn(f"engine_compatibility_for_{target}", result["missing_information"])
+
     def test_project_overlap_is_reported_as_a_signal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project_path = Path(directory)
@@ -301,6 +349,33 @@ class StructuredRecommendationTests(unittest.TestCase):
 
 
 class CatalogWorkflowTests(unittest.TestCase):
+    def test_import_requires_explicit_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            dest = Path(directory) / "library_catalog.json"
+            source = dest.with_name("import.json")
+            product = item()
+            del product["ownership_status"]
+            source.write_text(json.dumps(legacy_catalog([product])), encoding="utf-8")
+            with self.assertRaisesRegex(fab_catalog.CatalogError, "ownership-confirmed"):
+                fab_catalog.cmd_import(argparse.Namespace(catalog=dest, source=source, replace=False))
+            self.assertFalse(dest.exists())
+
+    def test_my_library_batch_respects_explicit_ownership_status(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            dest = Path(directory) / "library_catalog.json"
+            source = dest.with_name("batch.json")
+            args = argparse.Namespace(catalog=dest, source=source)
+            observed = item()
+            del observed["ownership_status"]
+            source.write_text(json.dumps({"items": [observed]}), encoding="utf-8")
+            fab_catalog.cmd_batch_upsert(args)
+            before = dest.read_bytes()
+            unconfirmed = dict(item("Other"), ownership_status="unverified")
+            source.write_text(json.dumps({"items": [item("Extra"), unconfirmed]}), encoding="utf-8")
+            with self.assertRaisesRegex(fab_catalog.CatalogError, "ownership-confirmed"):
+                fab_catalog.cmd_batch_upsert(args)
+            self.assertEqual(dest.read_bytes(), before)
+
     def test_batch_upsert_enrich_and_feedback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

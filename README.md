@@ -28,14 +28,15 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 최신 정식 릴리스
 
-- [Fab Library Advisor v0.3.3 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.3)
-- [fab-library-advisor-0.3.3.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.3/fab-library-advisor-0.3.3.zip)
+- [Fab Library Advisor v0.3.4 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.3.4)
+- [fab-library-advisor-0.3.4.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.3.4/fab-library-advisor-0.3.4.zip)
 
 ZIP은 버전별 플러그인 패키지를 확인하거나 수동으로 보관하기 위한 파일입니다.
 처음 설치하거나 업데이트할 때는 아래 공식 마켓플레이스 명령을 사용하세요.
 
 플러그인을 사용하는 작업이 시작될 때 공개 GitHub 릴리스를 하루에 한 번만
-확인합니다. 새 버전이 있으면 먼저 업데이트 여부를 묻고, 사용자가 명시적으로
+확인합니다. 확인 시각을 저장할 수 없는 환경에서는 다음 사용 때 다시 확인할 수 있습니다.
+새 버전이 있으면 먼저 업데이트 여부를 묻고, 사용자가 명시적으로
 승인한 경우에만 Codex의 공식 마켓플레이스 갱신 명령을 실행합니다. 개인 Fab
 카탈로그와 GitHub 인증 토큰은 업데이트 확인에 사용되지 않습니다.
 
@@ -145,6 +146,10 @@ python <skill-dir>/scripts/catalog.py --catalog <library_catalog.json> recommend
 다운로드 가능 여부가 필요한 경우에만 해당 후보의 공개 상세 페이지를
 확인합니다. 모든 제품 페이지를 매번 읽지 않으므로 추천 속도와 최신성의
 균형을 유지합니다.
+
+엔진 버전과 즐겨찾기는 검색어와 관련된 제품의 순위에만 영향을 줍니다.
+예를 들어 프로젝트가 UE 5.1이고 제품에 기록된 버전이 5.10이면
+해당 제품의 5.1 호환성은 추가 확인이 필요한 정보로 표시됩니다.
 
 다운로드를 명시적으로 요청한 제품이 카탈로그에 없으면 로그인된
 **My Library | Fab**에서 정확한 제품을 찾습니다. 소유한 제품이 하나로
@@ -259,6 +264,10 @@ URL, 만료되는 CDN URL, 세션 전용 URL과는 다릅니다.
 없습니다. 같은 Listing ID가 다시 발견되면 새 레코드를 만들지 않고 기존
 레코드의 제목·제작자·태그·특징을 병합합니다. ID가 없을 때는 기존처럼
 정규화된 제품명과 제작자 조합을 사용합니다.
+이 조합에 서로 다른 제품이 여럿 있으면 Fab Listing ID로 대상을 지정해야 합니다.
+일괄 갱신 중 이런 항목이 발견되면 배치 전체를 저장하기 전에 중단합니다.
+기존 파일을 `import-json`으로 가져올 때는 각 제품의 `ownership_status`가
+`confirmed`여야 합니다.
 
 ## 제거
 

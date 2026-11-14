@@ -75,7 +75,8 @@ The recommender expands common Korean/English synonyms and weights title,
 use cases, tags, style, technical features, included features, category, and
 description separately. It returns at most three candidates with `matched_on`,
 `confidence`, metadata completeness/freshness, missing information, integration
-cost, user-feedback influence, and possible project overlap.
+cost, user-feedback influence, and possible project overlap. With a search term,
+an observed engine version or a favorite can boost a relevant result only.
 
 3. Treat only returned items with `ownership_status: confirmed` as owned.
 4. Inspect current public listing pages only for the returned top candidates and
@@ -148,8 +149,8 @@ do not substitute public marketplace results as proof of ownership.
 For an ordinary Unreal task, sync only the focused search results needed for that
 task. For an explicit refresh request, update visible totals and visible products.
 For an explicit complete-index request, iterate through the full library in batches,
-deduplicate exact titles, validate after each batch, and report incomplete coverage
-honestly if the UI cannot expose every product.
+identify products by listing ID or an unambiguous title and publisher, validate
+after each batch, and report incomplete coverage if the UI cannot expose every product.
 
 Store only:
 
@@ -199,6 +200,11 @@ write over many subprocess calls:
 ```text
 python <skill-dir>/scripts/catalog.py batch-upsert "<observed-products.json>"
 ```
+
+If several listings share a title and publisher, supply the verified listing ID
+before retrying. An ambiguous entry leaves the whole batch unwritten.
+Use batch-upsert only for entries just observed in My Library. When importing
+a saved catalog with `import-json`, each item must carry `ownership_status: confirmed`.
 
 After inspecting a verified public listing, merge only supported stable metadata:
 
@@ -261,9 +267,10 @@ check before or alongside the primary work:
 python <skill-dir>/scripts/updater.py --json check
 ```
 
-The updater stores only the last check time and public GitHub release URLs in the
-same per-user application-data area as the catalog. It enforces a 24-hour interval,
-so repeated skill use does not repeatedly contact GitHub.
+The updater caches the check time, release version, and public GitHub release URL
+in a per-user state file. It reuses a valid result for 24 hours. If the file
+cannot be written, the check still
+returns the verified release and a subsequent check can contact GitHub again.
 
 - If `status` is `update_available`, tell the user the installed and latest versions
   and ask whether to update. Continue the primary Unreal task without waiting for an

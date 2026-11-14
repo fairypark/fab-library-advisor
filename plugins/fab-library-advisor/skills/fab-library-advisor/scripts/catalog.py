@@ -66,6 +66,7 @@ LISTING_PATH_RE = re.compile(
 )
 FAB_LISTING_ORIGIN = "https://www.fab.com"
 FAB_LISTING_HOSTS = {"fab.com", "www.fab.com"}
+ENGINE_VERSION_RE = re.compile(r"(?:Unreal Engine\s*|UE\s*)?(\d+\.\d+(?:\.\d+)?)", re.I)
 INTEGRATION_COSTS = {"unknown", "low", "medium", "high"}
 FEEDBACK_STATUSES = {"unused", "used", "dismissed", "favorite"}
 METADATA_SOURCES = {"my-library", "public-listing", "user-note", "legacy-import"}
@@ -339,7 +340,7 @@ def sanitize_item(raw_item: dict[str, Any]) -> dict[str, Any]:
     )
     item["category"] = clean_text(item.get("category"), "category", max_length=200)
     item["ownership_status"] = str(
-        item.get("ownership_status") or "confirmed"
+        item.get("ownership_status") or ""
     ).strip()
     item["listing_id"], item["listing_url"] = listing_identity(
         item.get("listing_id"), item.get("listing_url")
@@ -512,6 +513,17 @@ def field_search_text(item: dict[str, Any], field: str) -> str:
     return normalize(str(value or ""))
 
 
+def has_observed_engine_version(item: dict[str, Any], target: str) -> bool:
+    requested = ENGINE_VERSION_RE.fullmatch(target.strip())
+    if not requested:
+        return False
+    for value in item.get("supported_engine_versions") or []:
+        observed = ENGINE_VERSION_RE.fullmatch(value.strip())
+        if observed and observed[1] == requested[1]:
+            return True
+    return False
+
+
 def score_item(
     item: dict[str, Any],
     expanded_terms: dict[str, set[str]],
@@ -541,21 +553,17 @@ def score_item(
         if field_matches:
             matched_on[field] = sorted(field_matches)
 
-    if engine_version:
-        supported_versions = field_search_text(item, "supported_engine_versions")
-        normalized_engine = normalize(engine_version)
-        if normalized_engine and normalized_engine in supported_versions:
-            score += 4
-            matched_on.setdefault("engine_version", []).append(engine_version)
-
-    base_score = score
+    query_score = score
+    if engine_version and has_observed_engine_version(item, engine_version):
+        score += 4
+        matched_on["engine_version"] = [engine_version]
     feedback_status = (item.get("user_feedback") or {}).get("status", "unused")
     feedback_adjustments = {"favorite": 6, "used": 3, "dismissed": -12, "unused": 0}
     adjustment = feedback_adjustments.get(feedback_status, 0)
     if adjustment:
         score += adjustment
         matched_on["user_feedback"] = [feedback_status]
-    return max(0, score), matched_on, base_score
+    return max(0, score), matched_on, query_score
 
 
 def metadata_quality(item: dict[str, Any]) -> tuple[float, list[str], str]:
@@ -694,10 +702,9 @@ def recommendation_result(
 ) -> dict[str, Any]:
     completeness, missing, freshness = metadata_quality(item)
     if engine_version:
-        observed_versions = field_search_text(item, "supported_engine_versions")
-        if not observed_versions:
+        if not item.get("supported_engine_versions"):
             missing.append("supported_engine_versions")
-        elif normalize(engine_version) not in observed_versions:
+        elif not has_observed_engine_version(item, engine_version):
             missing.append(f"engine_compatibility_for_{engine_version}")
     result = search_result(item, score)
     result.update(
@@ -793,10 +800,10 @@ def rank_catalog(
         if category_filter and category_filter not in normalize(item["category"]):
             continue
         if expanded_terms:
-            score, matched_on, base_score = score_item(
+            score, matched_on, query_score = score_item(
                 item, expanded_terms, engine_version
             )
-            if base_score <= 0:
+            if query_score <= 0:
                 continue
         else:
             score, matched_on = 1, {}
@@ -936,6 +943,8 @@ def find_matching_indices(
             not listing_id or not item_listing_id or item_listing_id == listing_id
         ):
             matching_indices.append(index)
+    if not listing_id and len(matching_indices) > 1:
+        raise CatalogError("Multiple products match this title and publisher. Provide a listing ID.")
     return matching_indices
 
 
@@ -1094,8 +1103,10 @@ def cmd_batch_upsert(args: argparse.Namespace) -> int:
     for raw_item in raw_items:
         if not isinstance(raw_item, dict):
             raise CatalogError("Every batch item must be an object.")
-        candidate = sanitize_item(raw_item)
-        candidate["ownership_status"] = "confirmed"
+        # A batch records observed My Library entries. Honor any explicit status.
+        candidate = sanitize_item({"ownership_status": "confirmed", **raw_item})
+        if candidate["ownership_status"] != "confirmed":
+            raise CatalogError("Every batch item must be ownership-confirmed in My Library.")
         candidate["metadata_sources"] = sorted(
             set(candidate["metadata_sources"]) | {"my-library"}
         )

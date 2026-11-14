@@ -56,7 +56,7 @@ def base_version(value: str) -> str:
 def read_json(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise UpdateError(f"Could not read JSON from {path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise UpdateError(f"Expected a JSON object in {path}")
@@ -98,11 +98,11 @@ def parse_checked_at(value: object) -> datetime | None:
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
         return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
 
 
 def validated_release(payload: object) -> dict[str, str]:
@@ -158,37 +158,47 @@ def check_for_update(
 ) -> dict[str, Any]:
     checked_now = now or utc_now()
     installed = current_version(plugin_root)
-    state: dict[str, Any] = {}
-    if state_path.exists():
-        try:
-            state = read_json(state_path)
-        except UpdateError:
-            state = {}
+    try:
+        state = read_json(state_path)
+    except UpdateError:
+        state = {}
     previous = parse_checked_at(state.get("last_checked_at"))
-    due = force or previous is None or checked_now - previous >= timedelta(hours=interval_hours)
-    if not due:
-        latest = state.get("latest_version")
-        available = isinstance(latest, str) and parse_version(latest) > parse_version(installed)
-        return {
-            "status": "not_due",
-            "current_version": installed,
-            "latest_version": latest,
-            "update_available": available,
-            "release_url": state.get("release_url"),
-            "last_checked_at": state.get("last_checked_at"),
-        }
+    if (
+        not force
+        and previous is not None
+        and timedelta(0) <= checked_now - previous < timedelta(hours=interval_hours)
+    ):
+        try:
+            cached = validated_release(
+                {"tag_name": state.get("latest_version"), "html_url": state.get("release_url")}
+            )
+        except UpdateError:
+            pass  # Refresh an invalid cache from the public release endpoint.
+        else:
+            return {
+                "status": "not_due",
+                "current_version": installed,
+                "update_available": parse_version(cached["latest_version"]) > parse_version(installed),
+                "last_checked_at": state["last_checked_at"],
+                **cached,
+            }
     release = fetcher()
     safe_state = {
         "last_checked_at": iso_timestamp(checked_now),
         **release,
     }
-    atomic_write_json(state_path, safe_state)
+    try:
+        atomic_write_json(state_path, safe_state)
+        cache_saved = True
+    except OSError:
+        cache_saved = False
     available = parse_version(release["latest_version"]) > parse_version(installed)
     return {
         "status": "update_available" if available else "up_to_date",
         "current_version": installed,
         "update_available": available,
         "last_checked_at": safe_state["last_checked_at"],
+        "cache_saved": cache_saved,
         **release,
     }
 
