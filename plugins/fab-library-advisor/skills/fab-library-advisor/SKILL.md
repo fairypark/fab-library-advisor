@@ -74,7 +74,9 @@ When several editors are open, verify which one the MCP connection serves.
   `GetFabListingDetails` do not.
 - Keep only `listingId`, `title`, `seller`, `listingType`, `owned`,
   `assetFormats` and `engineVersions` in the `results` array of a temporary
-  private JSON file outside the repository. Run the command below per page.
+  private JSON file outside the repository. For a focused search or ordinary
+  refresh, save each page immediately using the command below. For an explicit
+  UE 5.9 full-library sync, follow the batching procedure below instead.
   Keep the current search's listing IDs for ranking. Keep the cursor only in
   the calling session. Do not save the raw MCP response or private inventory
   in project files.
@@ -83,10 +85,8 @@ When several editors are open, verify which one the MCP connection serves.
   python <skill-dir>/scripts/catalog.py batch-upsert <owned-page.json> --from-fab-toolset
   ```
 
-  Follow `nextCursor` unchanged when more results are needed. For an explicit
-  full sync, browse without keywords, use a stable sort such as `newest`, and
-  stop on exhaustion or a repeated cursor. Report the filters and unique IDs
-  observed. Fab provides no total count. A focused or interrupted scan stays
+  Follow `nextCursor` unchanged when more results are needed. Report the filters
+  and unique IDs observed. Fab provides no total count. A focused or interrupted scan stays
   partial. An empty successful search means no hits for those terms and filters.
   Try another relevant term if useful. Never erase existing entries on a miss.
 - **UE 5.8:** Search the local catalog first. For a miss, explicit live search
@@ -98,6 +98,30 @@ When several editors are open, verify which one the MCP connection serves.
   the private catalog is accessible, label its matches as previously indexed.
   A tool error cannot establish an empty library. With an unknown engine, use
   a verified official tool on the target editor or the My Library window.
+
+### UE 5.9 full-library sync
+
+1. For an explicit complete sync through the official tool, call
+   `SearchFabMyLibrary` with `count=24`, `sortBy="newest"`, and no keywords.
+   Use the same sort and filters on every call. Fetch pages sequentially using
+   the returned `nextCursor`; the presence of that cursor, even on a short
+   page, determines whether to continue.
+2. Keep each successful page's allowlisted `results` in its own private
+   temporary file. Accumulate up to five pages. As soon as five are ready,
+   run the command below once, passing those paths in fetch order. It merges
+   and validates the entire group under the catalog lock and writes once.
+   Clear the pending group only after success.
+
+   ```text
+   python <skill-dir>/scripts/catalog.py sync-fab-pages <page1.json> <page2.json> <page3.json> <page4.json> <page5.json>
+   ```
+
+3. When there is no next cursor, flush any remaining one to four paths with
+   the same command. On a search error or repeated cursor, stop paging, save
+   the valid pending pages, and report partial coverage. On a local write or
+   validation failure, keep the failed group for correction or retry before
+   fetching more. Count unique listing IDs across successful writes, including
+   retries. Do not delete older catalog entries or infer a Fab-wide total.
 
 ## Recommend owned products
 
