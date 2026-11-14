@@ -1154,19 +1154,36 @@ def fab_owned_items(page: dict[str, Any]) -> list[dict[str, Any]]:
     return items
 
 
+def full_sync_items(paths: list[Path]) -> list[dict[str, Any]]:
+    """Validate a single UE 5.9 full-sync write before merging any rows."""
+    if not 1 <= len(paths) <= 5:
+        raise CatalogError("A full-sync batch must contain 1 to 5 Fab pages.")
+    items = []
+    for path in paths:
+        page_items = fab_owned_items(read_json(path))
+        if len(page_items) > 24:
+            raise CatalogError("A SearchFabMyLibrary page cannot contain more than 24 rows.")
+        items.extend(page_items)
+    return items
+
+
 def cmd_batch_upsert(args: argparse.Namespace) -> int:
-    if args.catalog.exists():
-        catalog = sanitize_catalog(read_json(args.catalog))
+    pages = getattr(args, "pages", None)
+    official = pages is not None or getattr(args, "from_fab_toolset", False)
+    if pages is not None:
+        raw_items = full_sync_items(pages)
     else:
-        catalog = template_catalog()
-    payload = read_json(args.source)
-    official = getattr(args, "from_fab_toolset", False)
-    raw_items = fab_owned_items(payload) if official else payload.get("items")
+        payload = read_json(args.source)
+        raw_items = fab_owned_items(payload) if official else payload.get("items")
     if not isinstance(raw_items, list):
         raise CatalogError("Batch source must contain an items array.")
     if official and not raw_items:
         print("Empty owned-library page. No catalog entries changed.")
         return 0
+    if args.catalog.exists():
+        catalog = sanitize_catalog(read_json(args.catalog))
+    else:
+        catalog = template_catalog()
     if official:
         legacy_names = {
             (normalize(item["title"]), normalize(item["publisher"]))
@@ -1498,6 +1515,12 @@ def build_parser() -> argparse.ArgumentParser:
     batch_parser.add_argument("--from-fab-toolset", action="store_true",
                               help="Read the results page of UE SearchFabMyLibrary")
     batch_parser.set_defaults(func=cmd_batch_upsert)
+
+    full_sync_parser = subparsers.add_parser(
+        "sync-fab-pages", help="Save up to five owned-library pages from a UE 5.9 full sync in one write"
+    )
+    full_sync_parser.add_argument("pages", nargs="+", type=Path, help="Sanitized Fab page files in fetch order")
+    full_sync_parser.set_defaults(func=cmd_batch_upsert)
 
     enrich_parser = subparsers.add_parser(
         "enrich",

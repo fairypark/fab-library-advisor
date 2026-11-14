@@ -28,13 +28,12 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 최신 정식 릴리스
 
-### v0.4.0 업데이트
+### v0.4.1 업데이트
 
-**UE 5.9**에서는 Fab 창을 열지 않아도 공식 Fab 툴셋으로 내 라이브러리의 에셋을 검색할 수 있습니다.
-Advisor는 검색 결과에서 현재 프로젝트와 내 선호에 맞는 에셋을 최대 3개까지 추천합니다.
-다시 검색해도 즐겨찾기·사용·제외 기록은 유지됩니다.
-
-**UE 5.8**에서는 기존처럼 로컬 카탈로그를 먼저 검색하고, 필요한 경우 로그인된 **My Library | Fab** 창에서 보유 여부를 확인합니다.
+UE 5.9에서 **내 라이브러리 전체 동기화**를 요청하면 공식 Fab 툴셋으로 한 번에
+24개씩 조회합니다. Advisor는 최대 5페이지(120개)를 모아 로컬 카탈로그에 한 번
+저장하고, 마지막에 남은 페이지도 저장합니다. 특정 에셋 검색과 일반 갱신은
+기존처럼 페이지별로 반영합니다.
 
 기존 사용자는 아래 명령을 실행한 뒤 Codex를 재시작하고 새 채팅을 열면 됩니다.
 
@@ -42,8 +41,8 @@ Advisor는 검색 결과에서 현재 프로젝트와 내 선호에 맞는 에�
 codex plugin marketplace upgrade fairypark
 ```
 
-- [Fab Library Advisor v0.4.0 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.4.0)
-- [fab-library-advisor-0.4.0.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.4.0/fab-library-advisor-0.4.0.zip)
+- [Fab Library Advisor v0.4.1 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.4.1)
+- [fab-library-advisor-0.4.1.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.4.1/fab-library-advisor-0.4.1.zip)
 
 ZIP은 버전별 플러그인 패키지를 확인하거나 수동으로 보관하기 위한 파일입니다.
 처음 설치하거나 업데이트할 때는 아래 공식 마켓플레이스 명령을 사용하세요.
@@ -53,6 +52,14 @@ ZIP은 버전별 플러그인 패키지를 확인하거나 수동으로 보관�
 새 버전이 있으면 먼저 업데이트 여부를 묻고, 사용자가 명시적으로
 승인한 경우에만 Codex의 공식 마켓플레이스 갱신 명령을 실행합니다. 개인 Fab
 카탈로그와 GitHub 인증 토큰은 업데이트 확인에 사용되지 않습니다.
+
+### v0.4.0 업데이트
+
+**UE 5.9**에서는 Fab 창을 열지 않아도 공식 Fab 툴셋으로 내 라이브러리의 에셋을 검색할 수 있습니다.
+Advisor는 검색 결과에서 현재 프로젝트와 내 선호에 맞는 에셋을 최대 3개까지 추천합니다.
+다시 검색해도 즐겨찾기·사용·제외 기록은 유지됩니다.
+
+**UE 5.8**에서는 기존처럼 로컬 카탈로그를 먼저 검색하고, 필요한 경우 로그인된 **My Library | Fab** 창에서 보유 여부를 확인합니다.
 
 ## GitHub에서 설치
 

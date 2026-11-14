@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -184,6 +185,40 @@ class FabToolsetWorkflowTests(unittest.TestCase):
         self.cli("set-summary", "--total-products", "20")
         self.assertEqual(json.loads(self.cli("summary"))["total_products"], 20)
         self.cli("validate")
+
+    def page_file(self, index, rows):
+        path = self.catalog.with_name(f"observed-{index}.json")
+        path.write_text(json.dumps({"results": rows}), encoding="utf-8")
+        return str(path)
+
+    def test_full_sync_five_pages_one_write_and_final_remainder(self):
+        rows = [dict(self.row, listingId=f"00000000-0000-4000-8000-{i:012d}", title=f"Pack {i}")
+                for i in range(123)]
+        pages = [self.page_file(i, rows[i:i + 24]) for i in range(0, len(rows), 24)]
+        with patch.object(fab_catalog, "atomic_write_json", wraps=fab_catalog.atomic_write_json) as write:
+            self.cli("sync-fab-pages", *pages[:5])
+            self.assertEqual(write.call_count, 1)
+            self.assertEqual(fab_catalog.read_json(self.catalog)["indexed_products"], 120)
+            self.cli("sync-fab-pages", pages[5])
+            self.assertEqual(write.call_count, 2)
+        self.cli("feedback", rows[0]["listingId"], "--status", "favorite")
+        self.cli("sync-fab-pages", *pages[:5])
+        saved = fab_catalog.read_json(self.catalog)
+        self.assertEqual(saved["indexed_products"], 123)
+        self.assertEqual(saved["items"][0]["user_feedback"]["status"], "favorite")
+        self.cli("validate")
+
+    def test_full_sync_rejects_oversized_and_invalid_groups_without_partial_writes(self):
+        self.sync(self.row)
+        before = self.catalog.read_bytes()
+        page = self.page_file(0, [self.row])
+        for invalid in ([page] * 6, [self.page_file(1, [self.row] * 25)],
+                        [page, self.page_file(2, [dict(self.row, owned=False)])]):
+            with self.subTest(files=invalid), self.assertRaises(fab_catalog.CatalogError):
+                self.cli("sync-fab-pages", *invalid)
+            self.assertEqual(self.catalog.read_bytes(), before)
+        self.cli("sync-fab-pages", self.page_file(3, []))
+        self.assertEqual(self.catalog.read_bytes(), before)
 
 
 class CatalogIdentityTests(unittest.TestCase):
