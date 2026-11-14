@@ -28,6 +28,20 @@ the current user's own Fab library while working on Unreal Engine projects.
 
 ## 최신 정식 릴리스
 
+### v0.4.0 업데이트
+
+**UE 5.9**에서는 Fab 창을 열지 않아도 공식 Fab 툴셋으로 내 라이브러리의 에셋을 검색할 수 있습니다.
+Advisor는 검색 결과에서 현재 프로젝트와 내 선호에 맞는 에셋을 최대 3개까지 추천합니다.
+다시 검색해도 즐겨찾기·사용·제외 기록은 유지됩니다.
+
+**UE 5.8**에서는 기존처럼 로컬 카탈로그를 먼저 검색하고, 필요한 경우 로그인된 **My Library | Fab** 창에서 보유 여부를 확인합니다.
+
+기존 사용자는 아래 명령을 실행한 뒤 Codex를 재시작하고 새 채팅을 열면 됩니다.
+
+```cmd
+codex plugin marketplace upgrade fairypark
+```
+
 - [Fab Library Advisor v0.4.0 릴리스 안내](https://github.com/fairypark/fab-library-advisor/releases/tag/v0.4.0)
 - [fab-library-advisor-0.4.0.zip 직접 다운로드](https://github.com/fairypark/fab-library-advisor/releases/download/v0.4.0/fab-library-advisor-0.4.0.zip)
 
